@@ -1,0 +1,42 @@
+#!/bin/sh
+# Runs the built dashboard. Used by the LaunchAgent, which gets no shell
+# environment, so node has to be found here rather than inherited from a PATH.
+set -e
+
+PROJECT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT"
+
+find_node() {
+  # whatever is already on PATH wins
+  command -v node >/dev/null 2>&1 && { dirname "$(command -v node)"; return; }
+
+  # nvm: prefer the version it calls default, else the newest installed
+  versions="$HOME/.nvm/versions/node"
+  if [ -d "$versions" ]; then
+    default=$(cat "$HOME/.nvm/alias/default" 2>/dev/null || true)
+    if [ -n "$default" ] && [ -d "$versions/$default/bin" ]; then
+      echo "$versions/$default/bin"
+      return
+    fi
+    newest=$(ls -1 "$versions" 2>/dev/null | sort -V | tail -1)
+    [ -n "$newest" ] && { echo "$versions/$newest/bin"; return; }
+  fi
+
+  for dir in /opt/homebrew/bin /usr/local/bin /usr/bin; do
+    [ -x "$dir/node" ] && { echo "$dir"; return; }
+  done
+}
+
+NODE_BIN="$(find_node)"
+if [ -z "$NODE_BIN" ]; then
+  echo "dashboard: couldn't find node" >&2
+  exit 1
+fi
+
+# launchd gives us /usr/bin:/bin:/usr/sbin:/sbin and nothing else. The daily
+# report shells out to `claude`, which lives in ~/.local/bin, so the places
+# user tools actually live have to go back on the PATH here.
+PATH="$NODE_BIN:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+export PATH
+
+exec npm run start

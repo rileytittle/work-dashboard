@@ -1,0 +1,17 @@
+/node_modules
+/.next/
+/out/
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+
+# your keys
+.env*.local
+
+# your own background files
+/public/backgrounds/*
+!/public/backgrounds/.gitkeep
+
+# generated reports and stored OAuth tokens
+/.reports/
+
