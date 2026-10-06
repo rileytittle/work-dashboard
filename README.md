@@ -18,9 +18,9 @@ a window that points at it. Nothing leaves your machine except the API calls you
 │         ┌──────────────── Daily report · headline ──────────────┐        │
 │                                                                          │
 │  ┌─── ISSUES ────┐           8:47 AM            ┌─── REVIEWS ───┐        │
-│  │ TST-5865      │      Tuesday, October 6      │ 0 waiting     │        │
-│  │ TST-5864      │                              └───────────────┘        │
-│  │ TST-5863      │     13       0        2      ┌─── AGENTS ────┐        │
+│  │ ENG-412       │      Tuesday, October 6      │ 0 waiting     │        │
+│  │ ENG-408       │                              └───────────────┘        │
+│  │ ENG-401       │     13       0        2      ┌─── AGENTS ────┐        │
 │  │ …             │    open   review   agents    │ 4 sessions    │        │
 │  └───────────────┘                              │ Claude usage  │        │
 │                        ← your wallpaper →       └───────────────┘        │
@@ -330,8 +330,8 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.<you>.work-dashboard
 ### Removing it
 
 ```bash
-launchctl bootout gui/$(id -u)/com.coletittle.work-dashboard
-rm ~/Library/LaunchAgents/com.coletittle.work-dashboard.plist
+launchctl bootout gui/$(id -u)/com.<you>.work-dashboard
+rm ~/Library/LaunchAgents/com.<you>.work-dashboard.plist
 rm ~/.local/bin/dash
 rm -rf ~/Applications/Dashboard.app
 ```
