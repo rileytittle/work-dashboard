@@ -32,28 +32,58 @@ export type DayData = {
   errors: SourceError[]
 }
 
-export type ReportSection = { title: string; bullets: string[] }
+export type PrRef = { label: string; url: string; merged: boolean }
+
+/** An issue you finished, with the pull requests that closed it. */
+export type ReportIssue = {
+  identifier: string
+  title: string
+  url: string
+  points: number | null
+  prs: PrRef[]
+  /** One line from Claude on what actually changed */
+  note: string
+}
+
+export type ReportRepo = {
+  repo: string
+  prs: PrRef[]
+  /** One line from Claude on what the day did to this repo */
+  note: string
+}
+
+export type ReportMeetings = {
+  attended: number
+  minutes: number
+  /** Still to come later today — not counted as attended */
+  upcoming: number
+  note: string
+}
 
 export type Report = {
+  /** Bumped when the shape changes, so older saved reports are regenerated */
+  version: 2
   date: string
   generatedAt: string
+  /** The clock time the report covers up to */
+  coversUntil: string
   headline: string
-  sections: ReportSection[]
-  stats: { label: string; value: string }[]
-  /**
-   * Counts kept alongside the prose. The GitHub and Linear numbers are counted
-   * here; the meeting and Slack numbers come back from Claude, which read them
-   * through its own connectors.
-   */
+  issues: ReportIssue[]
+  repos: ReportRepo[]
+  /** Slack worth remembering: decisions, unblocking, problems raised */
+  communication: string[]
+  meetings: ReportMeetings
+  /** Pull requests that belong to no closed issue */
+  other: string[]
   totals: {
     prsOpened: number
     prsMerged: number
     prsReviewed: number
     issuesClosed: number
     points: number
+    repos: number
     meetings: number
     meetingMinutes: number
-    slackMessages: number
   }
   errors: SourceError[]
 }

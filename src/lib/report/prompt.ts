@@ -1,81 +1,99 @@
 import type { DayData } from "./types"
 
-/** Turns the day's raw data into something worth reading, and cheap to send. */
-function digest(d: DayData): string {
+const time = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+
+const shortRepo = (repo: string) => repo.split("/")[1] ?? repo
+export const prLabel = (repo: string, number: number) => `${shortRepo(repo)}#${number}`
+
+/** The day's facts, written out for Claude to reason over. */
+function facts(d: DayData): string {
   const lines: string[] = []
+
+  if (d.linear) {
+    lines.push("## Linear issues you closed today")
+    if (!d.linear.completed.length) lines.push("(none)")
+    for (const i of d.linear.completed) {
+      const pts = i.estimate ? `, ${i.estimate} points` : ""
+      const proj = i.project ? `, project ${i.project}` : ""
+      lines.push(`- ${i.identifier}${pts}${proj}: ${i.title}`)
+    }
+  }
 
   if (d.github) {
     const { opened, merged, reviewed } = d.github
-    lines.push("## Pull requests")
-    if (!opened.length && !merged.length && !reviewed.length) lines.push("(none today)")
-    for (const p of opened) lines.push(`- opened ${p.repo}#${p.number}: ${p.title}`)
-    for (const p of merged) lines.push(`- MERGED ${p.repo}#${p.number}: ${p.title}`)
-    for (const p of reviewed) lines.push(`- reviewed ${p.repo}#${p.number} by ${p.author}: ${p.title}`)
-  }
-
-  if (d.linear) {
-    lines.push("", "## Linear issues closed")
-    if (!d.linear.completed.length) lines.push("(none today)")
-    for (const i of d.linear.completed) {
-      const pts = i.estimate ? ` [${i.estimate} pts]` : ""
-      const proj = i.project ? ` (${i.project})` : ""
-      lines.push(`- ${i.identifier}${pts}${proj}: ${i.title}`)
+    lines.push("", "## Pull requests")
+    if (!opened.length && !merged.length && !reviewed.length) lines.push("(none)")
+    for (const p of merged) lines.push(`- MERGED ${prLabel(p.repo, p.number)} (${p.repo}): ${p.title}`)
+    for (const p of opened.filter((o) => !merged.some((m) => m.url === o.url))) {
+      lines.push(`- open ${prLabel(p.repo, p.number)} (${p.repo}): ${p.title}`)
     }
-    lines.push(`Total story points closed: ${d.linear.points}`)
+    for (const p of reviewed) lines.push(`- you reviewed ${prLabel(p.repo, p.number)} by ${p.author}: ${p.title}`)
   }
 
   if (d.errors.length) {
-    lines.push("", "## Sources that failed (say nothing about these)")
+    lines.push("", "## Sources that failed — say nothing about these")
     for (const e of d.errors) lines.push(`- ${e.source}: ${e.message}`)
   }
 
   return lines.join("\n")
 }
 
-export function buildPrompt(d: DayData): string {
-  return `You are writing a short end-of-day summary for the person whose day this was. Today is ${d.date}.
+export function buildPrompt(d: DayData, now: Date): string {
+  const identifiers = (d.linear?.completed ?? []).map((i) => i.identifier)
+  const prLabels = [
+    ...(d.github?.merged ?? []),
+    ...(d.github?.opened ?? []),
+  ].map((p) => prLabel(p.repo, p.number))
+  const repos = [...new Set([...(d.github?.merged ?? []), ...(d.github?.opened ?? [])].map((p) => shortRepo(p.repo)))]
 
-First gather two more things for yourself, then write the summary. Do not ask questions.
+  return `You are writing an end-of-day summary for the person whose day this was.
 
-1. **Meetings.** Use your Google Calendar connector to list today's events on the primary calendar.
-   Skip anything you declined, all-day entries, and blocks marked free — those aren't meetings you sat in.
-2. **Slack.** Use your Slack connector to find the messages you sent today. Keep only the ones that
-   decided something, unblocked someone or raised a problem. Ignore chatter and pleasantries.
+**It is ${time(now)} on ${d.date}.** The day below runs from midnight up to right now and no further.
+Nothing later today has happened yet, so never write about it as though it has.
 
-If either connector isn't available or returns nothing, carry on without it and say nothing about it.
-The pull request and issue data below is already gathered — don't go looking for more of it.
+First gather two more things yourself, then write the summary. Do not ask questions.
 
-Write in second person ("you shipped", "you spent"). Be concrete and specific: name the issues, the
-pull requests and the meetings that mattered, and use the real numbers. No filler, no praise, no
-"great job". If a section has nothing in it, leave the section out rather than saying "nothing
-happened". Group related work together instead of listing everything one by one — the point is what
-the day added up to, not a transcript. For Slack, pick out only the messages that decided something,
-unblocked someone or raised a problem; ignore chatter.
+1. **Meetings.** Use your Google Calendar connector for today's events on the primary calendar.
+   Skip anything you declined, all-day entries, and blocks marked free.
+   **A meeting counts as attended only if it has already ENDED by ${time(now)}.** Anything starting
+   later today is upcoming, not attended — count those separately and never say you were in one.
+2. **Slack.** Use your Slack connector for messages you sent today. Keep only the ones that decided
+   something, unblocked someone, or raised a problem. Ignore chatter and pleasantries.
 
-Reply with this JSON and nothing else:
+Then reply with ONLY this JSON:
 
 {
-  "headline": "one sentence, under 90 characters, saying what the day amounted to",
-  "sections": [
-    { "title": "Short section name", "bullets": ["one sentence each, 2-5 of them"] }
+  "headline": "one sentence, under 90 characters, on what the day amounted to so far",
+  "issues": [
+    {
+      "identifier": "exactly one of: ${identifiers.join(", ") || "(none closed today)"}",
+      "prs": ["the pull requests that did this work, from the list below"],
+      "note": "one sentence on what actually changed, in plain language"
+    }
   ],
-  "stats": [
-    { "label": "short label", "value": "short value" }
+  "repos": [
+    { "repo": "one of: ${repos.join(", ") || "(none)"}", "note": "one sentence on what the day did to this repo" }
   ],
-  "counts": {
-    "meetings": 0,
-    "meetingMinutes": 0,
-    "slackMessages": 0
-  }
+  "communication": ["one sentence each, at most 4, only what decided or unblocked something"],
+  "meetings": {
+    "attended": 0,
+    "minutes": 0,
+    "upcoming": 0,
+    "note": "one short sentence naming them, or \\"\\" if there were none"
+  },
+  "other": ["one sentence for any pull request that belongs to no closed issue, at most 3"]
 }
 
-"counts" is what you found yourself: how many meetings you attended, how many minutes they took in
-total, and how many messages you sent in Slack today. Use 0 for anything you couldn't read.
+Rules that matter:
 
-Use 2 to 4 sections. Good section names are things like "Shipped", "In review", "Meetings",
-"Worth following up". Put 3 to 5 stats in, the ones that actually say something about the day.
+- Use identifiers and pull request labels **exactly** as written below. Never invent one.
+- Do not repeat the issue title in "note" — it is already known. Say what the change does.
+- Every pull request should appear once: against an issue if it belongs to one, otherwise in "other".
+- Available pull requests: ${prLabels.join(", ") || "(none)"}
+- No praise, no filler, no "great job". Plain statements of what happened.
+- Leave a list empty rather than padding it.
 
 Here is the day:
 
-${digest(d)}`
+${facts(d)}`
 }

@@ -9,7 +9,9 @@ const file = (date: string) => path.join(DIR, `${date}.json`)
 
 export async function readReport(date: string): Promise<Report | null> {
   try {
-    return JSON.parse(await readFile(file(date), "utf8")) as Report
+    const saved = JSON.parse(await readFile(file(date), "utf8")) as Report
+    // an older shape is treated as missing, so it gets written again
+    return saved?.version === 2 ? saved : null
   } catch {
     return null
   }

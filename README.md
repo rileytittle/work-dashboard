@@ -162,6 +162,16 @@ under the header with a countdown and a **Run now** button; afterwards the pill 
 and expands into a card you can collapse again. The card floats over the dashboard, so nothing
 below it moves.
 
+The card reads top to bottom: a row of counts, then every Linear issue you closed with its title,
+story points and the pull requests that did it; then a line per repository; then the Slack that
+mattered; then your meetings. **Claude only supplies the judgement** — which pull request belongs to
+which issue, and a sentence about each. Every name, number and link comes from the data the
+dashboard fetched, so nothing in the report can be invented.
+
+The report always covers **midnight up to the moment it runs**, and says so at the bottom. Run it at
+lunchtime and it writes about your morning. A meeting counts as attended only once it has ended;
+anything later in the day is listed as still to come.
+
 ### How it decides to run
 
 There is no scheduler and no cron job. The first time the dashboard asks for the report *after it's

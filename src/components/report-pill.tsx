@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react"
 import { AlertCircle, ChevronDown, ChevronUp, Play, RefreshCw, Sparkles } from "lucide-react"
-import type { Report, ReportStatus } from "@/lib/report/types"
-import { useSettings } from "@/lib/settings"
+import type { PrRef, Report, ReportStatus } from "@/lib/report/types"
+import clsx from "clsx"
+import { linearHref, useSettings } from "@/lib/settings"
 import { timeUntil } from "@/lib/time"
 import { refreshPoll, usePoll } from "@/lib/use-poll"
 import { Dots } from "./panel"
@@ -121,6 +122,9 @@ function Card({
   onRun: () => void
   onCollapse: () => void
 }) {
+  const { settings } = useSettings()
+  const linearInApp = settings.linearInApp
+
   return (
     <div className="surface-strong animate-fade-in absolute inset-x-0 top-0 z-30">
       {busy && (
@@ -141,32 +145,80 @@ function Card({
       </div>
 
       <div className="thin-scroll max-h-[60vh] overflow-y-auto px-4 pb-4">
-        {report.stats.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-x-7 gap-y-2 border-y border-white/10 py-2.5">
-            {report.stats.map((s) => (
-              <div key={s.label}>
-                <div className="text-[15px] font-light tabular-nums text-white/90">{s.value}</div>
-                <div className="text-[10px] uppercase tracking-[0.14em] text-white/35">{s.label}</div>
-              </div>
-            ))}
-          </div>
+        <Stats report={report} />
+
+        {report.issues.length > 0 && (
+          <Block title="Completed">
+            <div className="space-y-2.5">
+              {report.issues.map((i) => (
+                <div key={i.identifier}>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <a
+                      href={linearHref(i.url, linearInApp)}
+                      target={linearInApp ? undefined : "_blank"}
+                      rel="noreferrer"
+                      className="font-mono text-[11px] text-accent hover:underline"
+                    >
+                      {i.identifier}
+                    </a>
+                    <span className="text-[13px] text-white/90">{i.title}</span>
+                    {i.points != null && (
+                      <span className="rounded-full border border-white/15 px-1.5 font-mono text-[10px] text-white/45">
+                        {i.points} pts
+                      </span>
+                    )}
+                    {i.prs.map((p) => (
+                      <Pr key={p.label} pr={p} />
+                    ))}
+                  </div>
+                  {i.note && <p className="mt-0.5 text-[12px] leading-snug text-white/55">{i.note}</p>}
+                </div>
+              ))}
+            </div>
+          </Block>
         )}
 
-        <div className="grid gap-x-8 gap-y-3.5 sm:grid-cols-2">
-          {report.sections.map((s) => (
-            <section key={s.title}>
-              <h3 className="label-xs mb-1.5">{s.title}</h3>
-              <ul className="space-y-1">
-                {s.bullets.map((b, i) => (
-                  <li key={i} className="flex gap-2 text-[13px] leading-snug text-white/75">
-                    <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-accent" />
-                    {b}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+        {report.repos.length > 0 && (
+          <Block title="By repo">
+            <div className="space-y-1.5">
+              {report.repos.map((r) => (
+                <div key={r.repo} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-mono text-[11px] text-white/70">{r.repo}</span>
+                  {r.prs.map((p) => (
+                    <Pr key={p.label} pr={p} compact />
+                  ))}
+                  {r.note && <span className="text-[12px] leading-snug text-white/55">{r.note}</span>}
+                </div>
+              ))}
+            </div>
+          </Block>
+        )}
+
+        {report.communication.length > 0 && (
+          <Block title="Communication">
+            <Bullets items={report.communication} />
+          </Block>
+        )}
+
+        {report.other.length > 0 && (
+          <Block title="Also">
+            <Bullets items={report.other} />
+          </Block>
+        )}
+
+        {(report.meetings.note || report.meetings.attended > 0 || report.meetings.upcoming > 0) && (
+          <Block title="Meetings">
+            <p className="text-[12px] leading-snug text-white/60">
+              {report.meetings.note || `${report.meetings.attended} so far`}
+              {report.meetings.upcoming > 0 && (
+                <span className="text-white/35">
+                  {" "}
+                  · {report.meetings.upcoming} still to come
+                </span>
+              )}
+            </p>
+          </Block>
+        )}
 
         {failure && (
           <p className="mt-3 flex items-start gap-1.5 text-[11px] text-red-300">
@@ -183,11 +235,77 @@ function Card({
         )}
 
         <p className="mt-3 text-[10px] uppercase tracking-[0.14em] text-white/25">
-          {new Date(report.generatedAt).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })} ·{" "}
-          {report.totals.prsMerged} merged · {report.totals.issuesClosed} closed · {report.totals.points} pts ·{" "}
-          {report.totals.meetings} meetings
+          Covers midnight to{" "}
+          {new Date(report.coversUntil).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
         </p>
       </div>
+    </div>
+  )
+}
+
+/** A labelled run of content inside the card. */
+function Block({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-3.5 border-t border-white/10 pt-3 first:mt-0 first:border-0 first:pt-0">
+      <h3 className="label-xs mb-2">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function Bullets({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-1">
+      {items.map((b, i) => (
+        <li key={i} className="flex gap-2 text-[12px] leading-snug text-white/65">
+          <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-accent" />
+          {b}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** A pull request chip; filled when it was merged, outlined when still open. */
+function Pr({ pr, compact }: { pr: PrRef; compact?: boolean }) {
+  return (
+    <a
+      href={pr.url}
+      target="_blank"
+      rel="noreferrer"
+      title={pr.merged ? "Merged" : "Open"}
+      className={clsx(
+        "rounded-full border px-1.5 font-mono text-[10px] transition hover:border-accent/60",
+        pr.merged
+          ? "border-accent/40 bg-accent/15 text-white/80"
+          : "border-white/15 text-white/45",
+        compact && "shrink-0",
+      )}
+    >
+      {pr.label}
+    </a>
+  )
+}
+
+function Stats({ report }: { report: Report }) {
+  const t = report.totals
+  const stats: [string, string | number][] = [
+    ["PRs merged", t.prsMerged],
+    ...(t.prsOpened > t.prsMerged ? ([["PRs opened", t.prsOpened]] as [string, number][]) : []),
+    ...(t.prsReviewed ? ([["reviewed", t.prsReviewed]] as [string, number][]) : []),
+    ["issues closed", t.issuesClosed],
+    ["story points", t.points],
+    ...(t.repos ? ([["repos", t.repos]] as [string, number][]) : []),
+    ...(t.meetings ? ([["meetings", `${t.meetings} · ${t.meetingMinutes}m`]] as [string, string][]) : []),
+  ]
+  return (
+    <div className="flex flex-wrap gap-x-7 gap-y-2 border-y border-white/10 py-2.5">
+      {stats.map(([label, value]) => (
+        <div key={label}>
+          <div className="text-[15px] font-light tabular-nums text-white/90">{value}</div>
+          <div className="text-[10px] uppercase tracking-[0.14em] text-white/35">{label}</div>
+        </div>
+      ))}
     </div>
   )
 }

@@ -1,12 +1,12 @@
 import { hasLinearKey } from "@/lib/linear"
 import { runClaude, parseJsonAnswer } from "./claude"
 import { dayWindow } from "./day"
-import { buildPrompt } from "./prompt"
+import { buildPrompt, prLabel } from "./prompt"
 import { notifyFailed, notifyReady } from "./notify"
 import { collectGithub } from "./sources/github"
 import { collectLinear } from "./sources/linear"
 import { readReport, writeReport } from "./store"
-import type { DayData, Report, SourceError } from "./types"
+import type { DayData, PrRef, Report, ReportIssue, ReportRepo, SourceError } from "./types"
 
 /**
  * The parts we fetch ourselves, because they need to be exact: pull requests and
@@ -37,38 +37,107 @@ export async function collectDay(now = new Date()): Promise<DayData> {
 
 type Answer = {
   headline?: string
-  sections?: { title?: string; bullets?: string[] }[]
-  stats?: { label?: string; value?: string }[]
-  counts?: { meetings?: number; meetingMinutes?: number; slackMessages?: number }
+  issues?: { identifier?: string; prs?: string[]; note?: string }[]
+  repos?: { repo?: string; note?: string }[]
+  communication?: string[]
+  meetings?: { attended?: number; minutes?: number; upcoming?: number; note?: string }
+  other?: string[]
 }
 
 const count = (n: unknown) => (typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(n) : 0)
+const line = (s: unknown) => (typeof s === "string" ? s.trim() : "")
+const shortRepo = (repo: string) => repo.split("/")[1] ?? repo
 
-/** Collects the day, has Claude fill in the rest and write it up, then saves it. */
+/**
+ * Collects the day, has Claude fill in the rest and write it up, then saves it.
+ *
+ * Claude only supplies judgement — which pull request belongs to which issue, and
+ * a sentence about each. Every name, number and link is taken from the data we
+ * fetched, so nothing in the report can be invented.
+ */
 export async function generateReport(now = new Date()): Promise<Report> {
   const data = await collectDay(now)
-  const answer = parseJsonAnswer<Answer>(await runClaude(buildPrompt(data)))
+  const answer = parseJsonAnswer<Answer>(await runClaude(buildPrompt(data, now)))
+
+  // every pull request of the day, by the label Claude was told to use
+  const allPrs = [...(data.github?.merged ?? []), ...(data.github?.opened ?? [])]
+  const mergedUrls = new Set((data.github?.merged ?? []).map((p) => p.url))
+  const prByLabel = new Map<string, PrRef>()
+  for (const p of allPrs) {
+    const label = prLabel(p.repo, p.number)
+    if (!prByLabel.has(label)) {
+      prByLabel.set(label, { label, url: p.url, merged: mergedUrls.has(p.url) })
+    }
+  }
+
+  const notesByIssue = new Map<string, { note: string; prs: string[] }>()
+  for (const i of answer.issues ?? []) {
+    const id = line(i.identifier)
+    if (id) notesByIssue.set(id, { note: line(i.note), prs: (i.prs ?? []).map(line).filter(Boolean) })
+  }
+
+  // the issue list is ours; Claude only annotates it
+  const claimed = new Set<string>()
+  const issues: ReportIssue[] = (data.linear?.completed ?? []).map((i) => {
+    const said = notesByIssue.get(i.identifier)
+    const prs = (said?.prs ?? [])
+      .map((label) => prByLabel.get(label))
+      .filter((p): p is PrRef => !!p)
+    prs.forEach((p) => claimed.add(p.label))
+    return {
+      identifier: i.identifier,
+      title: i.title,
+      url: i.url,
+      points: i.estimate,
+      prs,
+      note: said?.note ?? "",
+    }
+  })
+
+  const notesByRepo = new Map<string, string>()
+  for (const r of answer.repos ?? []) {
+    const name = line(r.repo)
+    if (name) notesByRepo.set(shortRepo(name), line(r.note))
+  }
+
+  const byRepo = new Map<string, PrRef[]>()
+  for (const p of allPrs) {
+    const name = shortRepo(p.repo)
+    const list = byRepo.get(name) ?? []
+    const ref = prByLabel.get(prLabel(p.repo, p.number))
+    if (ref && !list.some((x) => x.label === ref.label)) list.push(ref)
+    byRepo.set(name, list)
+  }
+
+  const repos: ReportRepo[] = [...byRepo]
+    .map(([repo, prs]) => ({ repo, prs, note: notesByRepo.get(repo) ?? "" }))
+    .sort((a, b) => b.prs.length - a.prs.length)
 
   const report: Report = {
+    version: 2,
     date: data.date,
     generatedAt: new Date().toISOString(),
-    headline: answer.headline?.trim() || "Your day",
-    sections: (answer.sections ?? [])
-      .map((s) => ({ title: s.title?.trim() ?? "", bullets: (s.bullets ?? []).map((b) => b.trim()).filter(Boolean) }))
-      .filter((s) => s.title && s.bullets.length),
-    stats: (answer.stats ?? [])
-      .map((s) => ({ label: s.label?.trim() ?? "", value: String(s.value ?? "").trim() }))
-      .filter((s) => s.label && s.value),
+    coversUntil: now.toISOString(),
+    headline: line(answer.headline) || "Your day so far",
+    issues,
+    repos,
+    communication: (answer.communication ?? []).map(line).filter(Boolean).slice(0, 4),
+    meetings: {
+      attended: count(answer.meetings?.attended),
+      minutes: count(answer.meetings?.minutes),
+      upcoming: count(answer.meetings?.upcoming),
+      note: line(answer.meetings?.note),
+    },
+    other: (answer.other ?? []).map(line).filter(Boolean).slice(0, 3),
     totals: {
       prsOpened: data.github?.opened.length ?? 0,
       prsMerged: data.github?.merged.length ?? 0,
       prsReviewed: data.github?.reviewed.length ?? 0,
-      issuesClosed: data.linear?.completed.length ?? 0,
+      issuesClosed: issues.length,
       points: data.linear?.points ?? 0,
-      // these three are Claude's own count, from the connectors
-      meetings: count(answer.counts?.meetings),
-      meetingMinutes: count(answer.counts?.meetingMinutes),
-      slackMessages: count(answer.counts?.slackMessages),
+      repos: repos.length,
+      meetings: count(answer.meetings?.attended),
+      meetingMinutes: count(answer.meetings?.minutes),
     },
     errors: data.errors,
   }
