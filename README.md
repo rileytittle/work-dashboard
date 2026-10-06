@@ -1,209 +1,321 @@
 # Dashboard
 
-A personal command center that runs on your own machine. Your Linear issues, the pull requests
-waiting on your review, your running Claude Code agents and your Spotify player — sitting quietly
-over a background you choose.
+> A personal command center that runs on your own Mac. Your work on one screen, over a background
+> you choose, with an end-of-day summary written for you.
 
-Built with Next.js 16, React 19, Tailwind CSS 4 and daisyUI 5.
+It pulls together the things you'd otherwise have five tabs open for — the issues in your current
+Linear cycle, the pull requests waiting on your review, the Claude Code sessions running on your
+machine, and your Spotify player — and lays them over any image or video you want. At 4:40 PM it
+collects everything you did that day and has Claude write it up.
+
+It is **not** a website. It's a small web server that starts when you log in and never leaves, with
+a window that points at it. Nothing leaves your machine except the API calls you'd make anyway.
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  ■ DASHBOARD                               ♪ Now playing      [settings] │
+│                                                                          │
+│         ┌──────────────── Daily report · headline ──────────────┐        │
+│                                                                          │
+│  ┌─── ISSUES ────┐           8:47 AM            ┌─── REVIEWS ───┐        │
+│  │ TST-5865      │      Tuesday, October 6      │ 0 waiting     │        │
+│  │ TST-5864      │                              └───────────────┘        │
+│  │ TST-5863      │     13       0        2      ┌─── AGENTS ────┐        │
+│  │ …             │    open   review   agents    │ 4 sessions    │        │
+│  └───────────────┘                              │ Claude usage  │        │
+│                        ← your wallpaper →       └───────────────┘        │
+└──────────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-## What you need
+## What's on it
 
-Every integration uses **your own** accounts. Each panel works on its own, so skip anything you
-don't use and switch that panel off in **Settings**.
-
-| For | You need | Required? |
+| Panel | What it shows | Needs |
 | --- | --- | --- |
-| Everything | **Node.js 20.9+** and npm | Yes |
-| Issues panel | A **Linear** account and a personal API key | For that panel |
-| Reviews panel | A **GitHub** account — git already signed in on this machine, or a token | For that panel |
-| Agents panel | **Claude Code** installed and used on this machine | Optional |
-| Spotify player | **Spotify Premium** and your own (free) Spotify developer app | For that panel |
-| Daily report | **Claude Code** on this machine, with its Calendar and Slack connectors | For that panel |
+| **Issues** | Your Linear issues in the active cycle, grouped by status, with priority, labels, SLA countdowns and story points. Issues in triage collapse at the bottom. | Linear API key |
+| **Reviews** | Open pull requests where your review is requested, grouped by repository. | GitHub login |
+| **Agents** | Claude Code sessions running right now — spinner while working, check when done — with project, branch and last prompt. Sessions that just finished flash green. | Claude Code |
+| **Claude usage** | The same plan limits as `/usage`: 5-hour session, weekly, per-model. | Claude Code |
+| **Spotify** | Play, pause, skip, shuffle, switch devices, pick a playlist, stream in the window. | Spotify Premium |
+| **Daily report** | What you did today, written by Claude at 4:40 PM. | Claude Code |
+| **Clock** | Time, date, and a live count of what's open, waiting and running. | — |
+
+Every panel switches off in Settings, and each one works without the others.
 
 ---
 
-## Setup
-
-### 1. Install
+## Quick start
 
 ```bash
 npm install
-```
-
-### 2. Create `.env.local`
-
-Copy `.env.example` to `.env.local` and fill in what you use. The file is git-ignored, so your keys
-stay on this machine.
-
-```bash
-cp .env.example .env.local
-```
-
-### 3. Run
-
-```bash
+cp .env.example .env.local     # then fill in what you use
 npm run dev
 ```
 
-Open **<http://127.0.0.1:3000>**. Use `127.0.0.1`, not `localhost`, or the Spotify login will fail.
-Restart the server after you change `.env.local` — Next only reads it at startup.
+Open **<http://127.0.0.1:3000>** — use `127.0.0.1`, not `localhost`, or Spotify's login will reject
+the redirect.
 
-That's the development server. To leave the dashboard running all the time instead, see
-**Running it all the time** below.
+That's the development server. To make it a permanent part of your Mac, see
+[Running it as a Mac app](#running-it-as-a-mac-app).
+
+> **`.env.local` is only read at startup.** Restart the server after you change it.
+
+---
+
+## Setting up each service
+
+Skip anything you don't use and switch that panel off in Settings.
+
+<details>
+<summary><b>Linear</b> — the Issues panel</summary>
+
+1. In Linear: **Settings → Security & access → Personal API keys** → create a key.
+2. Put it in `LINEAR_API_KEY`.
+
+Shows every issue assigned to you in your team's **active cycle** that isn't canceled. If your team
+doesn't use cycles, the panel will be empty.
+
+Clicking an issue opens it in the Linear desktop app. Turn that off in **Settings → Links** to use
+the browser instead.
+</details>
+
+<details>
+<summary><b>GitHub</b> — the Reviews panel</summary>
+
+**Easiest:** leave `GITHUB_TOKEN` blank. If you've ever pushed or pulled from github.com over HTTPS
+on this machine, the app asks git for that saved login (`git credential fill`, which reads your
+keychain).
+
+**Or** create a token at <https://github.com/settings/tokens> — classic with `repo`, or fine-grained
+with **Pull requests: Read** — and put it in `GITHUB_TOKEN`.
+
+If your organization uses SSO, click **Configure SSO → Authorize** next to the token, or that org's
+pull requests won't appear.
+</details>
+
+<details>
+<summary><b>Spotify</b> — the player</summary>
+
+You need **your own** Spotify developer app; someone else's Client ID won't work, because apps in
+development mode only allow users their owner has added.
+
+1. <https://developer.spotify.com/dashboard> → **Create app**.
+2. Redirect URI exactly `http://127.0.0.1:3000/callback`.
+3. Under APIs used, tick **Web API** and **Web Playback SDK**.
+4. Copy the **Client ID** into `NEXT_PUBLIC_SPOTIFY_CLIENT_ID`, restart, then click **Connect
+   Spotify**.
+
+Only the Client ID is used — login is PKCE, so there's no secret to store. Playback control and
+**Play here** need Premium.
+</details>
+
+<details>
+<summary><b>Claude Code</b> — agents, usage and the daily report</summary>
+
+Nothing to configure, as long as `claude` is installed and you've signed in.
+
+The Agents panel reads Claude Code's own session files in `~/.claude/sessions`. The usage row reads
+its login from your keychain, asks `api.anthropic.com` once a minute, and never sends the token to
+the browser.
+
+**Settings → Daily report** lists every source with a tick or a cross, so you can see at a glance
+what the report can read.
+</details>
+
+### Environment variables
+
+| Variable | For | Required |
+| --- | --- | --- |
+| `LINEAR_API_KEY` | Issues panel, issues in the report | For that panel |
+| `GITHUB_TOKEN` | Reviews panel, PRs in the report | Optional — falls back to your git login |
+| `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` | Spotify player | For that panel |
+| `REPORT_AT` | When the report runs, 24-hour local time | Optional — defaults to `16:40` |
+| `NEXT_PUBLIC_DASHBOARD_TITLE` | The wordmark and tab title | Optional — defaults to `Dashboard` |
 
 ---
 
 ## Your background
 
-This is the part you set yourself. Open **Settings** (the sliders button, top right) → **Background**:
+**Settings → Background:**
 
-- **Colour** — six presets (three flat, three gradients) or any colour you pick.
-- **Your files** — upload an image or a video, or **drop one anywhere on the page**. They are saved
-  in `public/backgrounds/`, which is git-ignored, and you can copy files there by hand too. Hover a
-  thumbnail to delete it.
+- **Colour** — six presets, three flat and three gradients, or any colour you pick.
+- **Your files** — upload an image or video, or **drop one anywhere on the page**. Saved in
+  `public/backgrounds/`, which git ignores. Hover a thumbnail to delete it.
 - **Link** — paste the URL of any image or video.
 
 Images and videos also get **Fit** (fill the screen or show the whole thing) and **Blur**. Under
-**Appearance** there is **Dim**, which lays black over the background so panel text stays readable
-on a busy photo, and **Accent**, the one colour the whole interface highlights with.
+**Appearance**, **Dim** lays black over the background so panel text stays readable, and **Accent**
+sets the one colour the whole interface highlights with.
 
-Videos play muted and loop. Everything you choose is remembered in this browser.
+If the clock disappears into a busy photo, **Settings → Clock → Frosted panel behind it** puts it on
+a card whose opacity you control, and **Top left** moves it out of the middle entirely.
 
----
-
-## Connecting each service
-
-### Linear (Issues panel)
-
-1. In Linear: **Settings → Security & access → Personal API keys**, create a key.
-2. Put it in `LINEAR_API_KEY`.
-
-The panel shows every issue assigned to you in your team's **active cycle** that isn't canceled,
-grouped by status, with priority, labels and SLA countdowns. Issues assigned to you sitting in
-triage are under **In triage** at the bottom. The footer totals your open and finished points. If
-your team doesn't use cycles, the panel will be empty.
-
-### GitHub (Reviews panel)
-
-Every open pull request where your review is requested, grouped by repository.
-
-- **Easiest:** leave `GITHUB_TOKEN` blank. If you have ever pushed or pulled from github.com over
-  HTTPS on this machine, the app asks git for that saved login (`git credential fill`, which reads
-  the macOS keychain or Windows Credential Manager).
-- **Or** create a token at <https://github.com/settings/tokens> — classic with the `repo` scope, or
-  fine-grained with **Pull requests: Read** — and put it in `GITHUB_TOKEN`.
-- If your organization uses SSO, click **Configure SSO → Authorize** next to the token, or that
-  org's PRs won't appear.
-
-### Claude Code (Agents panel)
-
-Nothing to configure. The panel reads Claude Code's own session files in `~/.claude/sessions` and
-shows each running session: a spinner while it works, a check when it's done, with its project,
-branch and last prompt. Sessions that just finished flash green for a few seconds.
-
-When a session's branch matches a Linear issue — Linear's suggested branch name, or any branch
-carrying the identifier, like `fix/eng-123-retry` — that issue gets a small agent chip, so you can
-see at a glance which of your issues something is being done to.
-
-The **Claude usage** row at the bottom shows the same plan limits as Claude Code's `/usage` (5-hour
-session, weekly, per-model weekly) with reset times. The server reads Claude Code's login from the
-macOS keychain or `~/.claude/.credentials.json`, asks `api.anthropic.com` once a minute, and never
-sends the token to the browser. That login is short-lived and Claude Code refreshes it whenever it
-runs, so if you haven't used Claude Code for a while this says usage is unavailable until you do.
-
-### Spotify (player)
-
-Every person needs their **own** Spotify developer app — someone else's Client ID will not work for
-you, because apps in development mode only allow users their owner has added. It takes two minutes:
-
-1. Go to <https://developer.spotify.com/dashboard> and click **Create app**.
-2. Set the **Redirect URI** to exactly `http://127.0.0.1:3000/callback`.
-3. Under APIs used, tick **Web API** and **Web Playback SDK**.
-4. Copy the app's **Client ID** into `NEXT_PUBLIC_SPOTIFY_CLIENT_ID` and restart `npm run dev`.
-5. Click **Connect Spotify** in the top right and approve.
-
-Notes:
-
-- **Spotify Premium** is required for playback control and for **Play here** (streaming in the tab).
-- Only the Client ID is used — the app signs in with PKCE, so there is no client secret to store.
-- If the in-tab player runs out of songs it restarts your last playlist on shuffle.
+Videos play muted and loop. Everything you choose is remembered in that browser.
 
 ---
 
-## Running it all the time
+## The daily report
 
-It's installed as a macOS **LaunchAgent**, so the built dashboard starts at login and comes back on
-its own if it ever dies. Nothing to start by hand.
+At **4:40 PM** the dashboard collects your day and has Claude write it up. Until then it's a pill
+under the header with a countdown and a **Run now** button; afterwards the pill carries the headline
+and expands into a card you can collapse again. The card floats over the dashboard, so nothing
+below it moves.
 
-| Piece | Where |
+### How it decides to run
+
+There is no scheduler and no cron job. The first time the dashboard asks for the report *after it's
+due*, the server runs it, saves it to `.reports/<date>.json` and serves that copy to every tab for
+the rest of the day. Open the dashboard at 7 PM and it runs then. **Run now** forces a fresh one at
+any hour and replaces the day's saved copy.
+
+When it finishes on its own, macOS shows a banner with the headline. Pressing **Run again**
+yourself stays quiet — you're already looking at it. A run that fails sends a banner too, so a
+broken report never passes silently.
+
+> Banners come from `osascript`, which macOS attributes to **Script Editor** — that's the name to
+> look for in **System Settings → Notifications** if nothing appears. `brew install terminal-notifier`
+> makes the banner clickable and gives it its own entry. `dash notify-test` fires a sample.
+
+### What it reads
+
+| Source | How |
 | --- | --- |
-| Service definition | `~/Library/LaunchAgents/com.coletittle.work-dashboard.plist` |
-| What it runs | `bin/serve` in this project, which finds node itself |
-| Log | `~/Library/Logs/work-dashboard.log` |
-| Control command | `~/.local/bin/dash` |
-| Dock app | `~/Applications/Dashboard.app` |
+| Pull requests opened, merged, reviewed | The dashboard fetches them — these numbers have to be exact |
+| Linear issues closed, with story points | Same |
+| Meetings you attended | **Claude reads your calendar itself**, through the Google Calendar connector on your Claude account |
+| Slack messages you sent | **Claude reads Slack itself**, through the Slack connector |
+
+That last part is the trick: because the summary is written by the **Claude Code CLI on your
+machine**, it already has your connectors. The dashboard needs no Google OAuth app, no Slack app and
+no tokens of its own. Check them with `claude mcp list`.
+
+The run is allowlisted to exactly those two connectors; writing files, running commands and browsing
+the web are denied. It uses your Claude plan rather than API credits — roughly 10–15 cents of usage,
+well under a minute — and runs with `--no-session-persistence`, so report runs never show up in the
+Agents panel.
+
+To change what it pays attention to, edit `src/lib/report/prompt.ts`.
+
+---
+
+## How it all fits together
+
+One Next.js server does everything. The browser is just a window onto it.
+
+```mermaid
+flowchart LR
+    W["Browser window"]
+    S["Next.js server<br/>127.0.0.1:3000"]
+
+    W -->|"polls /api/* every 3-90s"| S
+    W -->|"PKCE, straight from the browser"| SPOT["Spotify Web API"]
+
+    S --> LIN["Linear API"]
+    S --> GH["GitHub API"]
+    S --> SESS["~/.claude/sessions"]
+    S --> KEY["macOS keychain<br/>(plan usage)"]
+    S --> FILES["public/backgrounds/"]
+    S --> CLI["claude -p"]
+
+    CLI --> CAL["Google Calendar<br/>connector"]
+    CLI --> SLK["Slack connector"]
+```
+
+Each panel is a thin client component that polls one API route. Routes that touch the network hold
+the credentials server-side, so no key ever reaches the browser. **Spotify is the exception** — it
+talks to Spotify directly from the browser using PKCE, which is why it needs only a Client ID.
+
+### Why it has to run locally
+
+Three things read your actual machine and cannot work from a server somewhere else:
+
+- **Agents** reads `~/.claude/sessions`
+- **Claude usage** reads your keychain
+- **The daily report** shells out to the `claude` command and borrows its connectors
+
+Deploy this to the cloud and those three go dark. That's the reason it lives on your Mac.
+
+---
+
+## Running it as a Mac app
+
+Nothing here is Electron and nothing is compiled. "The app" is three ordinary pieces.
+
+```mermaid
+flowchart TB
+    LOGIN["You log in"] --> LAUNCHD["launchd reads the LaunchAgent plist"]
+    LAUNCHD --> SERVE["bin/serve finds node"]
+    SERVE --> NEXT["next start on :3000<br/>restarted automatically if it dies"]
+
+    CLICK["Dock icon or 'dash'"] --> WIN["A window with no tabs or address bar"]
+    WIN -.->|"loads"| NEXT
+```
+
+**1. The server is a login item.** macOS has a service manager, `launchd`. A plist in
+`~/Library/LaunchAgents/` registers the dashboard as a job with `RunAtLoad` (start at login) and
+`KeepAlive` (restart it if it ever exits). Kill the process and it's back in ten seconds.
+
+**2. `bin/serve` makes that survivable.** `launchd` runs programs with almost no environment — no
+`PATH`, no shell config. Since node lives under nvm and `claude` lives in `~/.local/bin`, neither
+would be found. `bin/serve` locates node itself (PATH → nvm's `default` alias → newest installed →
+Homebrew) and puts the user tool directories back, so upgrading node doesn't break anything.
+
+**3. The thing you click is a folder.** A macOS application is a directory with a particular shape:
+an `Info.plist` and an executable. `Dashboard.app` is exactly that, and its "executable" is a
+one-line shell script that runs `dash open`. The window itself is Chrome with `--app`, which hides
+the tabs and address bar.
+
+### Install it as a real app (recommended)
+
+The dashboard ships a web manifest, so Chrome can install it properly:
+
+```bash
+dash install        # opens a normal tab — the install option isn't in an app window
+```
+
+Then the install icon at the right of the address bar, or **⋮ → Cast, save and share → Install page
+as app**. You get an app with its own icon, its own window and **its own process, so quitting Chrome
+no longer closes your dashboard**. It still uses Chrome's engine, so Spotify's in-window playback
+keeps working — which it wouldn't under Electron, where DRM playback needs Widevine.
+
+Once installed, `dash` opens that app automatically and `Dashboard.app` becomes redundant.
 
 ### The `dash` command
 
-```bash
-dash             # open the dashboard, filling the screen
-dash update      # rebuild after you change code, then restart
-dash status      # is it up?
-dash log         # last 60 lines of the log
-dash follow      # tail the log
-dash report      # run today's report now
-dash stop        # stop it until next login
-dash start       # start it again
-```
+Installed at `~/.local/bin/dash`.
 
-**After changing any code, run `dash update`.** The service runs the *built* version, so edits don't
-show up until it's rebuilt. If you'd rather have instant reloads while working on it, run
-`dash stop` and use `npm run dev` as usual, then `dash start` when you're done.
+| Command | Does |
+| --- | --- |
+| `dash` | Open the dashboard, filling the screen |
+| `dash update` | **Rebuild after code changes, then restart** |
+| `dash status` | Is it up, and what does launchd think |
+| `dash log [n]` / `dash follow` | Read the log |
+| `dash report` | Run today's report now |
+| `dash notify-test` | Check that notifications appear |
+| `dash install` | Open a normal tab so you can install it as an app |
+| `dash start` / `stop` / `restart` | Control the service |
 
-`bin/serve` looks for node on the PATH, then in nvm (the version nvm calls default, else the newest
-installed), then in Homebrew — so upgrading node won't break the service. It also puts
-`~/.local/bin`, `/opt/homebrew/bin` and `/usr/local/bin` back on the PATH, because launchd starts
-the service with almost none and the daily report shells out to `claude`, which lives in
-`~/.local/bin`.
+> **`dash update` is the one to remember.** The service runs the *built* output, so edits don't
+> appear until it's rebuilt. If you're actively working on it, `dash stop` and use `npm run dev`
+> instead, then `dash start` when you're done.
 
-### Notifications
-
-When the report finishes on its own at 4:40, macOS shows a banner with the headline. Pressing
-**Run again** yourself stays quiet, since you are already looking at it. A run that fails sends a
-banner too, so a broken report never passes silently.
-
-Out of the box this uses `osascript`, so the banner appears but clicking it does nothing, and macOS
-attributes it to **Script Editor** — that's the name to look for in **System Settings →
-Notifications** if no banner shows up. Installing `terminal-notifier` makes the banner clickable
-(it opens the dashboard) and gives it its own entry:
+### Setting it up on a new machine
 
 ```bash
-brew install terminal-notifier
+git clone <this repo> && cd work-dashboard
+npm install
+cp .env.example .env.local      # fill it in
+npm run build
 ```
 
-Nothing else to change — the server picks it up automatically. `dash notify-test` fires a sample.
+Then create the LaunchAgent at `~/Library/LaunchAgents/com.<you>.work-dashboard.plist` pointing
+`ProgramArguments` at this project's `bin/serve`, with `RunAtLoad` and `KeepAlive` set true and
+`WorkingDirectory` set to the project, and copy `dash` into `~/.local/bin`. Load it with:
 
-### Installing it as its own app
-
-The dashboard ships a web manifest, so Chrome can install it as a desktop application: open it,
-then **⋮ → Cast, save and share → Install page as app**. You get a real app with its own icon, its
-own window and **its own process — so quitting Chrome no longer closes your dashboard**, which is
-the one thing the plain window below can't do. It still uses Chrome's engine, so Spotify's in-tab
-playback keeps working.
-
-Once it's installed, `dash` opens that app instead of a plain window, and you can delete
-`Dashboard.app`.
-
-### The Dock icon
-
-`~/Applications/Dashboard.app` opens the dashboard in a Chrome window of its own. Drag it to the
-Dock to keep it there. It starts the service first if it somehow isn't running.
-
-If you'd prefer a true standalone app window, Chrome can make one: open the dashboard, then
-**⋮ → Cast, save and share → Install page as app**. That gives its own Dock icon and window, and you
-can delete `Dashboard.app`.
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.<you>.work-dashboard.plist
+```
 
 ### Removing it
 
@@ -216,82 +328,61 @@ rm -rf ~/Applications/Dashboard.app
 
 ---
 
-## The daily report
+## Where things live
 
-At **4:40 PM** the dashboard collects your day and has Claude write it up: the pull requests you
-opened, merged and reviewed, the Linear issues you closed and their story points, the meetings you
-actually attended, and the Slack messages you sent. The dashboard fetches the pull requests and
-issues itself, because those numbers have to be exact; Claude gathers the meetings and Slack
-messages through its own connectors in the same run. Until then it's a pill under the header with a
-countdown and a **Run now** button; afterwards the pill carries the headline and expands into a card
-you can collapse again. The card floats over the dashboard, so nothing below it moves.
+| Path | What |
+| --- | --- |
+| `src/app/page.tsx` | The page — background plus dashboard |
+| `src/components/*-panel.tsx` | One file per panel |
+| `src/components/settings-drawer.tsx` | Everything in Settings |
+| `src/app/api/*/route.ts` | One route per panel, plus `report` and `sources` |
+| `src/lib/report/` | Collecting the day, the prompt, running `claude`, saving |
+| `src/lib/settings.ts` | Every setting and its default |
+| `src/app/globals.css` | The whole look — tokens, the frosted `.surface` card, animations |
+| `bin/serve` | What launchd runs |
+| `public/backgrounds/` | Your wallpapers *(git-ignored)* |
+| `.reports/` | Finished reports, one JSON per day *(git-ignored)* |
+| `~/Library/Logs/work-dashboard.log` | Server log |
 
-There is no background scheduler. The first time the dashboard asks for the report after it's due,
-the server runs it, saves it to `.reports/<date>.json` (git-ignored) and serves that copy to every
-tab for the rest of the day. Open the dashboard at 7 PM and it runs then. **Run now** forces a fresh
-one at any hour and replaces the day's saved copy. Change the time with `REPORT_AT` in `.env.local`.
+### Adding a panel
 
-The writing is done by the **Claude Code CLI on this machine** — `claude -p` — so it uses your
-existing Claude plan rather than API credits. Each run costs roughly 10–15 cents of plan usage and
-takes well under a minute. It runs with `--no-session-persistence`, so report runs never show up in
-the Agents panel.
-
-**Settings → Daily report** lists every source with a tick or a cross, so you can see what it can read.
-
-### Meetings and Slack
-
-Nothing to set up. Claude reads them itself through the **Google Calendar** and **Slack connectors
-already attached to your Claude account** — the same ones you use in Claude Code — so the dashboard
-never needs a Google OAuth app, a Slack app, or a token of its own. Check them with `claude mcp list`;
-Settings → Daily report shows whether each one is up.
-
-The run is allowed to reach only those two connectors. Writing files, running commands and browsing
-the web are denied outright.
+Write an API route, write a client component that polls it with `usePoll`, add an id to `PANELS` in
+`src/lib/settings.ts`, and drop it into the grid in `src/components/dashboard.tsx`.
 
 ---
 
-## Using it
-
-- **Settings** (top right) — background, accent, clock colour, dim, which panels are on screen, and
-  what the daily report can read. The clock colour applies to the counts underneath it too, and the
-  clock and those counts switch on and off separately.
-- **Daily report** (under the header) — click the pill to expand it, the chevron to collapse it.
-- **Now playing** (top right) — click it for the full player: play/pause, skip, shuffle, device
-  switching, what's up next, and your playlists. **Play here** streams in this tab.
-- **Hide** (bottom right, or `H`) — hides everything so you can just look at your background.
-- The centre clock shows a live count of what is open, waiting on your review, and being worked on.
-
-### Keyboard
+## Keyboard
 
 | Key | Action |
 | --- | --- |
 | `Space` | Play / pause |
-| `←` / `→` | Previous / next track |
-| `H` | Hide / show the interface |
+| `←` `→` | Previous / next track |
+| `H` | Hide / show the whole interface |
 | `Esc` | Close Settings |
 
 ---
 
-## Making it yours
+## Troubleshooting
 
-- `src/app/globals.css` holds the look: the frosted `.surface` card, the accent variable, and the
-  small type styles. Change them there and everything follows.
-- `NEXT_PUBLIC_DASHBOARD_TITLE` in `.env.local` sets the wordmark and the browser tab title.
-- Panels live in `src/components/*-panel.tsx`, and each one is a thin client component over an API
-  route in `src/app/api/`. To add your own, write a route, write a panel, and add it to
-  `PANELS` in `src/lib/settings.ts` and to the grid in `src/components/dashboard.tsx`.
-- The report's wording lives in `src/lib/report/prompt.ts` — change the instructions there to change
-  what it pays attention to. A new source is a file in `src/lib/report/sources/` plus a line in
-  `collectDay` and in the digest.
+| Problem | Fix |
+| --- | --- |
+| Code changes don't show up | `dash update` — the service runs the built output |
+| Spotify: `INVALID_CLIENT: Invalid redirect URI` | The URI must be exactly `http://127.0.0.1:3000/callback`, and you must open the app at `127.0.0.1`, not `localhost` |
+| Spotify: "No Spotify device available" | Open Spotify anywhere, or reload so the in-window player connects. Controls need Premium |
+| Reviews says it can't get a token | Run `git fetch` in any GitHub repo to sign in, or set `GITHUB_TOKEN` |
+| Issues panel empty | Nothing open in your active cycle, or your team doesn't use cycles |
+| Claude usage unavailable | Open Claude Code once to refresh its login. A rate limit here clears itself |
+| Report says it can't find `claude` | `bin/serve` must put `~/.local/bin` on the PATH — check it hasn't been edited |
+| No notification banners | System Settings → Notifications → **Script Editor** → allow |
+| Nothing loads at all | `dash status`, then `dash log` |
 
 ---
 
 ## Privacy
 
-This app has **no login** and is meant to run on your own machine. Its API routes hand your Linear
-issues, GitHub reviews and Claude Code session details to anyone who can reach the server, so don't
-deploy it publicly as it stands. Your keys live only in `.env.local`, your finished reports in `.reports/` and your background files in `public/backgrounds/` —
-all of which git ignores.
+There is **no login**. The API routes hand your Linear issues, pull requests and Claude Code session
+details to anyone who can reach the server, so don't put it on the open internet as it stands.
 
-The Agents panel, the Claude usage row and the daily report all read things that only exist on the
-machine running the server, so they only work locally.
+Everything personal stays out of git: your keys in `.env.local`, your wallpapers in
+`public/backgrounds/`, your finished reports — which quote your Slack messages and meetings — in
+`.reports/`.
