@@ -45,6 +45,12 @@ export type Settings = {
   panels: Record<PanelId, boolean>
   /** Colour of the big clock: "default" (white), "accent", or a hex colour */
   clockColor: string
+  /** Where the clock block sits */
+  clockPosition: "center" | "corner"
+  /** A frosted card behind the clock, for backgrounds it would otherwise vanish into */
+  clockSurface: boolean
+  /** How opaque that card is, 0-100 */
+  clockSurfaceOpacity: number
   /** Whether the daily report is expanded into its card */
   reportOpen: boolean
   /** Open Linear issues in the desktop app rather than the browser */
@@ -60,6 +66,9 @@ export const DEFAULTS: Settings = Object.freeze<Settings>({
   accent: "#7aa2f7",
   panels: { report: true, issues: true, reviews: true, agents: true, spotify: true, clock: true, counts: true },
   clockColor: "default",
+  clockPosition: "center",
+  clockSurface: false,
+  clockSurfaceOpacity: 55,
   reportOpen: true,
   linearInApp: true,
   seconds: false,

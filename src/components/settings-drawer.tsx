@@ -157,9 +157,65 @@ function Drawer({ onClose }: { onClose: () => void }) {
                 </label>
               </div>
             </div>
-            {(settings.panels.clock || settings.panels.counts) && (
+            <Slider
+              label="Dim"
+              value={bg.dim}
+              max={90}
+              unit="%"
+              onChange={(dim) => setBackground({ dim })}
+            />
+          </Section>
+
+          <Section title="Show">
+            {PANELS.map(({ id, label }) => (
+              <label
+                key={id}
+                className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/5 hover:text-white"
+              >
+                {label}
+                <input
+                  type="checkbox"
+                  className="toggle toggle-sm border-white/20 checked:border-accent checked:bg-accent"
+                  checked={settings.panels[id]}
+                  onChange={() => togglePanel(id)}
+                />
+              </label>
+            ))}
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/5 hover:text-white">
+              Seconds on the clock
+              <input
+                type="checkbox"
+                className="toggle toggle-sm border-white/20 checked:border-accent checked:bg-accent"
+                checked={settings.seconds}
+                onChange={() => set("seconds", !settings.seconds)}
+              />
+            </label>
+          </Section>
+
+          {(settings.panels.clock || settings.panels.counts) && (
+            <Section title="Clock">
+              <div className="mb-4 flex gap-1 rounded-full border border-white/10 bg-black/30 p-1">
+                {(
+                  [
+                    ["center", "Middle"],
+                    ["corner", "Top left"],
+                  ] as ["center" | "corner", string][]
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => set("clockPosition", id)}
+                    className={clsx(
+                      "flex-1 rounded-full py-1 text-xs transition",
+                      settings.clockPosition === id ? "bg-accent/20 text-white" : "text-white/40 hover:text-white/70",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               <div className="mb-4">
-                <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-white/35">Clock &amp; counts</div>
+                <div className="mb-2 text-[11px] uppercase tracking-[0.1em] text-white/35">Colour</div>
                 <div className="flex flex-wrap items-center gap-2">
                   {CLOCK_COLORS.map((c) => (
                     <button
@@ -195,42 +251,29 @@ function Drawer({ onClose }: { onClose: () => void }) {
                   </label>
                 </div>
               </div>
-            )}
 
-            <Slider
-              label="Dim"
-              value={bg.dim}
-              max={90}
-              unit="%"
-              onChange={(dim) => setBackground({ dim })}
-            />
-          </Section>
-
-          <Section title="Show">
-            {PANELS.map(({ id, label }) => (
-              <label
-                key={id}
-                className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/5 hover:text-white"
-              >
-                {label}
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/5 hover:text-white">
+                Frosted panel behind it
                 <input
                   type="checkbox"
                   className="toggle toggle-sm border-white/20 checked:border-accent checked:bg-accent"
-                  checked={settings.panels[id]}
-                  onChange={() => togglePanel(id)}
+                  checked={settings.clockSurface}
+                  onChange={() => set("clockSurface", !settings.clockSurface)}
                 />
               </label>
-            ))}
-            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/5 hover:text-white">
-              Seconds on the clock
-              <input
-                type="checkbox"
-                className="toggle toggle-sm border-white/20 checked:border-accent checked:bg-accent"
-                checked={settings.seconds}
-                onChange={() => set("seconds", !settings.seconds)}
-              />
-            </label>
-          </Section>
+              {settings.clockSurface && (
+                <div className="mt-3">
+                  <Slider
+                    label="Panel opacity"
+                    value={settings.clockSurfaceOpacity}
+                    max={100}
+                    unit="%"
+                    onChange={(v) => set("clockSurfaceOpacity", v)}
+                  />
+                </div>
+              )}
+            </Section>
+          )}
 
           <Section title="Links">
             <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/5 hover:text-white">

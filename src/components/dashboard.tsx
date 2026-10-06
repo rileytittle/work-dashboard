@@ -29,6 +29,8 @@ export function Dashboard() {
   }, [chrome, set])
 
   const right = panels.reviews || panels.agents
+  const showClock = panels.clock || panels.counts
+  const inCorner = settings.clockPosition === "corner"
 
   return (
     <>
@@ -39,15 +41,22 @@ export function Dashboard() {
         )}
         aria-hidden={!chrome}
       >
-        <header className="flex items-center justify-between gap-4 px-6 py-4">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <span
-              className="h-6 w-6 shrink-0 rounded-lg bg-accent"
-              style={{ boxShadow: "0 0 18px -4px var(--accent)" }}
-            />
-            <span className="truncate text-[13px] font-semibold uppercase tracking-[0.16em] text-white/50">
-              {TITLE}
-            </span>
+        <header className="flex items-start justify-between gap-4 px-6 py-4">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <span
+                className="h-6 w-6 shrink-0 rounded-lg bg-accent"
+                style={{ boxShadow: "0 0 18px -4px var(--accent)" }}
+              />
+              <span className="truncate text-[13px] font-semibold uppercase tracking-[0.16em] text-white/50">
+                {TITLE}
+              </span>
+            </div>
+            {showClock && inCorner && (
+              <div className="mt-3.5">
+                <Clock variant="corner" />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2.5">
             {panels.spotify && <SpotifyPlayer />}
@@ -71,7 +80,7 @@ export function Dashboard() {
           )}
 
           <div className="order-1 flex min-w-0 items-center justify-center lg:order-2 lg:min-h-[50vh] lg:self-center">
-            {(panels.clock || panels.counts) && <Clock />}
+            {showClock && !inCorner && <Clock />}
           </div>
 
           {right ? (
