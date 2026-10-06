@@ -232,6 +232,22 @@ function Drawer({ onClose }: { onClose: () => void }) {
             </label>
           </Section>
 
+          <Section title="Links">
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl px-2 py-1.5 text-[13px] text-white/70 transition hover:bg-white/5 hover:text-white">
+              Open Linear in the desktop app
+              <input
+                type="checkbox"
+                className="toggle toggle-sm border-white/20 checked:border-accent checked:bg-accent"
+                checked={settings.linearInApp}
+                onChange={() => set("linearInApp", !settings.linearInApp)}
+              />
+            </label>
+            <p className="px-2 pt-1 text-[11px] leading-relaxed text-white/30">
+              Off sends issues to your browser instead. Chrome asks once whether to allow Linear to
+              open — tick its box to stop being asked.
+            </p>
+          </Section>
+
           <Section title="Daily report">
             <Connections />
           </Section>

@@ -4,6 +4,7 @@ import clsx from "clsx"
 import { ChevronRight, CircleAlert, CircleCheck } from "lucide-react"
 import type { Agent } from "@/app/api/agents/route"
 import type { LinearCard } from "@/app/api/linear/route"
+import { linearHref, useSettings } from "@/lib/settings"
 import { span, timeLeft } from "@/lib/time"
 import { usePoll } from "@/lib/use-poll"
 import { Panel, PanelLoading, PanelMessage, PanelMeta } from "./panel"
@@ -134,8 +135,17 @@ function PointsSummary({ all }: { all: LinearCard[] }) {
 }
 
 function IssueCard({ i, agents }: { i: LinearCard; agents: Agent[] }) {
+  const { settings } = useSettings()
+  const inApp = settings.linearInApp
+
   return (
-    <a href={i.url} target="_blank" rel="noreferrer" className="row group">
+    <a
+      href={linearHref(i.url, inApp)}
+      // a linear:// link hands off to the app, so it must not open a blank tab
+      target={inApp ? undefined : "_blank"}
+      rel="noreferrer"
+      className="row group"
+    >
       <div className="mb-1 flex items-center gap-2">
         <Priority p={i.priority} />
         <span className="font-mono text-[11px] text-white/35">{i.identifier}</span>

@@ -16,6 +16,13 @@ export const PANELS = [
 
 export type PanelId = (typeof PANELS)[number]["id"]
 
+/**
+ * The Linear desktop app claims the linear:// scheme and takes the same path as
+ * the web URL, so swapping the protocol is all a deep link needs.
+ */
+export const linearHref = (url: string, inApp: boolean) =>
+  inApp ? url.replace(/^https:\/\//, "linear://") : url
+
 export type BackgroundKind = "color" | "image" | "video"
 
 export type Background = {
@@ -40,6 +47,8 @@ export type Settings = {
   clockColor: string
   /** Whether the daily report is expanded into its card */
   reportOpen: boolean
+  /** Open Linear issues in the desktop app rather than the browser */
+  linearInApp: boolean
   /** Show seconds on the big clock */
   seconds: boolean
   /** Whether the whole interface is visible (off = just the background) */
@@ -52,17 +61,25 @@ export const DEFAULTS: Settings = Object.freeze<Settings>({
   panels: { report: true, issues: true, reviews: true, agents: true, spotify: true, clock: true, counts: true },
   clockColor: "default",
   reportOpen: true,
+  linearInApp: true,
   seconds: false,
   chrome: true,
 })
 
+/** Backgrounds used to be served statically from /backgrounds; they come through the API now. */
+const STATIC_PREFIX = "/backgrounds/"
+
 function merge(saved: unknown): Settings {
   if (!saved || typeof saved !== "object") return DEFAULTS
   const s = saved as Partial<Settings>
+  const background = { ...DEFAULTS.background, ...s.background }
+  if (background.src.startsWith(STATIC_PREFIX)) {
+    background.src = `/api/backgrounds/${background.src.slice(STATIC_PREFIX.length)}`
+  }
   return {
     ...DEFAULTS,
     ...s,
-    background: { ...DEFAULTS.background, ...s.background },
+    background,
     panels: { ...DEFAULTS.panels, ...s.panels },
   }
 }

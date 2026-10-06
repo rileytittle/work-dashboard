@@ -13,10 +13,12 @@ const MAX_BYTES = 250 * 1024 * 1024
 
 export type BackgroundFile = {
   name: string
-  /** Served straight out of /public */
+  /** Served by the [name] route, not statically — see the note there */
   url: string
   kind: "image" | "video"
 }
+
+const urlFor = (name: string) => `/api/backgrounds/${encodeURIComponent(name)}`
 
 function kindOf(name: string): "image" | "video" | null {
   const ext = path.extname(name).toLowerCase()
@@ -44,7 +46,7 @@ function uniqueName(base: string, taken: Set<string>): string {
 async function list(): Promise<BackgroundFile[]> {
   const names = await readdir(DIR).catch(() => [])
   return names
-    .map((name) => ({ name, url: `/backgrounds/${encodeURIComponent(name)}`, kind: kindOf(name) }))
+    .map((name) => ({ name, url: urlFor(name), kind: kindOf(name) }))
     .filter((f): f is BackgroundFile => f.kind !== null)
     .sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -79,7 +81,7 @@ export async function POST(req: Request) {
   await writeFile(path.join(DIR, final), Buffer.from(await file.arrayBuffer()))
 
   return NextResponse.json({
-    file: { name: final, url: `/backgrounds/${encodeURIComponent(final)}`, kind: kindOf(final) },
+    file: { name: final, url: urlFor(final), kind: kindOf(final) },
     files: await list(),
   })
 }
